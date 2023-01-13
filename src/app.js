@@ -16,6 +16,10 @@ let db;
 await mongoClient.connect()
 db = mongoClient.db()
 
+function privateMessages(message, user) {
+  
+}
+
 const userSchema = Joi.object({
   name: Joi.string().required()
 })
@@ -84,8 +88,29 @@ server.post('/messages', async (req, res) => {
 })
 
 server.get('/messages', async (req, res) => {
+  const limit = req.query.limit
+  const user = req.headers.user
+  let lastMessages = []
   const messages = await db.collection('messages').find().toArray()
-  res.send(messages)
+
+  lastMessages = messages.filter(item => {
+    if(item.type === 'message' || item.type === 'status') {
+      return true
+    }
+
+    if(item.type === 'private_message' && item.from === user || item.to === user) {
+      return true
+    }
+
+    return false
+  })
+
+  if (!limit) {
+    return res.send(messages)
+  }
+
+  lastMessages = lastMessages.reverse().slice(0, limit).reverse()
+  res.send(lastMessages)
 })
 
 const PORT = 5000
