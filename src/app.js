@@ -16,10 +16,6 @@ let db;
 await mongoClient.connect()
 db = mongoClient.db()
 
-function privateMessages(message, user) {
-  
-}
-
 const userSchema = Joi.object({
   name: Joi.string().required()
 })
@@ -111,6 +107,18 @@ server.get('/messages', async (req, res) => {
 
   lastMessages = lastMessages.reverse().slice(0, limit).reverse()
   res.send(lastMessages)
+})
+
+server.post('/status', async (req, res) => {
+  const user = req.headers.user
+
+  if(!await db.collection("participants").findOne({name: user})) {
+    return res.status(422).send('Você não está logado')
+  }
+
+  await db.collection("participants").updateOne({name: user}, {$set: {lastStatus: Date.now()}})
+
+  res.sendStatus(200)
 })
 
 const PORT = 5000
