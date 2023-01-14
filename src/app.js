@@ -108,7 +108,7 @@ server.get('/messages', async (req, res) => {
 		return false;
 	});
 
-	if (limit <= 0 || isNaN(limit)) {
+	if (limit && (limit < 1 || isNaN(limit))) {
 		return res.sendStatus(422);
 	}
 
