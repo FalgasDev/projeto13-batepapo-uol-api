@@ -13,8 +13,16 @@ server.use(cors())
 const mongoClient = new MongoClient(process.env.DATABASE_URL)
 let db;
 
-await mongoClient.connect()
-db = mongoClient.db()
+try {
+
+  await mongoClient.connect()
+  db = mongoClient.db()
+
+} catch (err) {
+
+  console.log(err)
+
+}
 
 const userSchema = Joi.object({
   name: Joi.string().required()
@@ -120,6 +128,32 @@ server.post('/status', async (req, res) => {
 
   res.sendStatus(200)
 })
+
+function removeParticipant() {
+  setInterval(async () => {
+
+    const lastStatusExpired = Date.now() - 10000
+
+    const users = await db.collection('participants').find().toArray()
+
+    users.forEach(async item => {
+      if(item.lastStatus < lastStatusExpired) {
+        await db.collection('participants').deleteOne({name: item.name})
+
+        await db.collection('messages').insertOne({
+          from: item.name,
+          to: 'Todos',
+          text: 'sai da sala...',
+          type: 'status',
+          time: dayjs(Date.now()).format('hh:mm:ss')
+        })
+      }
+    })
+
+  }, 15000)
+}
+
+removeParticipant()
 
 const PORT = 5000
 
