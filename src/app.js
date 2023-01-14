@@ -1,160 +1,165 @@
-import express from "express"
-import cors from "cors"
-import { MongoClient } from "mongodb"
-import dotenv from "dotenv"
-import dayjs from "dayjs"
-import Joi from "joi"
-dotenv.config()
+import express from 'express';
+import cors from 'cors';
+import { MongoClient } from 'mongodb';
+import dotenv from 'dotenv';
+import dayjs from 'dayjs';
+import Joi from 'joi';
+dotenv.config();
 
-const server = express()
-server.use(express.json())
-server.use(cors())
+const server = express();
+server.use(express.json());
+server.use(cors());
 
-const mongoClient = new MongoClient(process.env.DATABASE_URL)
+const mongoClient = new MongoClient(process.env.DATABASE_URL);
 let db;
 
 try {
-
-  await mongoClient.connect()
-  db = mongoClient.db()
-
+	await mongoClient.connect();
+	db = mongoClient.db();
 } catch (err) {
-
-  console.log(err)
-
+	console.log(err);
 }
 
 const userSchema = Joi.object({
-  name: Joi.string().required()
-})
+	name: Joi.string().required(),
+});
 
 const messageSchema = Joi.object({
-  to: Joi.string().required(),
-  text: Joi.string().required(),
-  type: Joi.string().valid('message', 'private_message').required()
-})
+	to: Joi.string().required(),
+	text: Joi.string().required(),
+	type: Joi.string().valid('message', 'private_message').required(),
+});
 
 server.post('/participants', async (req, res) => {
-  const { name } = req.body
-  const userValidation = userSchema.validate({ name })
+	const { name } = req.body;
+	const userValidation = userSchema.validate({ name });
 
-  if(userValidation.error) {
-    return res.sendStatus(422)
-  }
+	if (userValidation.error) {
+		return res.sendStatus(422);
+	}
 
-  if(await db.collection("participants").findOne({name})) {
-    return res.status(409).send("Esse user já está em uso")
-  }
+	if (await db.collection('participants').findOne({ name })) {
+		return res.status(409).send('Esse user já está em uso');
+	}
 
-  await db.collection("messages").insertOne({
-    from: name,
-    to: "Todos",
-    text: "entra na sala...",
-    type: "status",
-    time: dayjs(Date.now()).format('hh:mm:ss')
-  })
+	await db.collection('messages').insertOne({
+		from: name,
+		to: 'Todos',
+		text: 'entra na sala...',
+		type: 'status',
+		time: dayjs(Date.now()).format('hh:mm:ss'),
+	});
 
-  await db.collection("participants").insertOne({
-    name,
-    lastStatus: Date.now()
-  })
+	await db.collection('participants').insertOne({
+		name,
+		lastStatus: Date.now(),
+	});
 
-  res.sendStatus(201)
-})
+	res.sendStatus(201);
+});
 
 server.get('/participants', async (req, res) => {
-  const users = await db.collection('participants').find().toArray()
-  res.send(users)
-})
+	const users = await db.collection('participants').find().toArray();
+	res.send(users);
+});
 
 server.post('/messages', async (req, res) => {
-  const { to, text, type } = req.body
-  const from = req.headers.user
-  const messageValidation = messageSchema.validate({to, text, type})
+	const { to, text, type } = req.body;
+	const from = req.headers.user;
+	const messageValidation = messageSchema.validate({ to, text, type });
 
-  if(messageValidation.error) {
-    return res.sendStatus(422)
-  }
+	if (messageValidation.error) {
+		return res.sendStatus(422);
+	}
 
-  if(!await db.collection("participants").findOne({name: from})) {
-    return res.status(422).send('Você não está logado')
-  }
+	if (!(await db.collection('participants').findOne({ name: from }))) {
+		return res.status(422).send('Você não está logado');
+	}
 
-  await db.collection('messages').insertOne({
-    to,
-    text,
-    type,
-    from,
-    time: dayjs(Date.now()).format('hh:mm:ss')
-  })
+	await db.collection('messages').insertOne({
+		to,
+		text,
+		type,
+		from,
+		time: dayjs(Date.now()).format('hh:mm:ss'),
+	});
 
-  res.sendStatus(201)
-})
+	res.sendStatus(201);
+});
 
 server.get('/messages', async (req, res) => {
-  const limit = req.query.limit
-  const user = req.headers.user
-  let lastMessages = []
-  const messages = await db.collection('messages').find().toArray()
+	const limit = req.query.limit;
+	const user = req.headers.user;
+	let lastMessages = [];
+	const messages = await db.collection('messages').find().toArray();
 
-  lastMessages = messages.filter(item => {
-    if(item.type === 'message' || item.type === 'status') {
-      return true
-    }
+	lastMessages = messages.filter((item) => {
+		if (item.type === 'message' || item.type === 'status') {
+			return true;
+		}
 
-    if(item.type === 'private_message' && item.from === user || item.to === user) {
-      return true
-    }
+		if (
+			(item.type === 'private_message' && item.from === user) ||
+			item.to === user
+		) {
+			return true;
+		}
 
-    return false
-  })
+		return false;
+	});
 
-  if (!limit) {
-    return res.send(lastMessages)
-  }
+	if (limit <= 0 || isNaN(limit)) {
+		return res.sendStatus(422);
+	}
 
-  lastMessages = lastMessages.slice(-limit)
-  res.send(lastMessages)
-})
+	if (!limit) {
+		return res.send(lastMessages);
+	}
+
+	lastMessages = lastMessages.slice(-limit);
+	res.send(lastMessages);
+});
 
 server.post('/status', async (req, res) => {
-  const user = req.headers.user
+	const user = req.headers.user;
 
-  if(!await db.collection("participants").findOne({name: user})) {
-    return res.status(404).send('Você não está logado')
-  }
+	if (!(await db.collection('participants').findOne({ name: user }))) {
+		return res.status(404).send('Você não está logado');
+	}
 
-  await db.collection("participants").updateOne({name: user}, {$set: {lastStatus: Date.now()}})
+	await db
+		.collection('participants')
+		.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
 
-  res.sendStatus(200)
-})
+	res.sendStatus(200);
+});
 
 function removeParticipant() {
-  setInterval(async () => {
+	setInterval(async () => {
+		const lastStatusExpired = Date.now() - 10000;
 
-    const lastStatusExpired = Date.now() - 10000
+		const users = await db.collection('participants').find().toArray();
 
-    const users = await db.collection('participants').find().toArray()
+		users.forEach(async (item) => {
+			if (item.lastStatus < lastStatusExpired) {
+				await db.collection('participants').deleteOne({ name: item.name });
 
-    users.forEach(async item => {
-      if(item.lastStatus < lastStatusExpired) {
-        await db.collection('participants').deleteOne({name: item.name})
-
-        await db.collection('messages').insertOne({
-          from: item.name,
-          to: 'Todos',
-          text: 'sai da sala...',
-          type: 'status',
-          time: dayjs(Date.now()).format('hh:mm:ss')
-        })
-      }
-    })
-
-  }, 15000)
+				await db.collection('messages').insertOne({
+					from: item.name,
+					to: 'Todos',
+					text: 'sai da sala...',
+					type: 'status',
+					time: dayjs(Date.now()).format('hh:mm:ss'),
+				});
+			}
+		});
+	}, 15000);
 }
 
-removeParticipant()
+removeParticipant();
 
-const PORT = 5000
+const PORT = 5000;
 
-server.listen(PORT, () => console.log(`O servidor está rodando na porta ${PORT}`))
+server.listen(PORT, () =>
+	console.log(`O servidor está rodando na porta ${PORT}`)
+);
