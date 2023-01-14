@@ -88,7 +88,7 @@ server.post('/messages', async (req, res) => {
 });
 
 server.get('/messages', async (req, res) => {
-	const limit = req.query.limit;
+	const limit = Number(req.query.limit);
 	const user = req.headers.user;
 	let lastMessages = [];
 	const messages = await db.collection('messages').find().toArray();
