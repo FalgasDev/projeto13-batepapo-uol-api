@@ -110,10 +110,10 @@ server.get('/messages', async (req, res) => {
   })
 
   if (!limit) {
-    return res.send(messages)
+    return res.send(lastMessages)
   }
 
-  lastMessages = lastMessages.reverse().slice(0, limit).reverse()
+  lastMessages = lastMessages.slice(-limit)
   res.send(lastMessages)
 })
 
