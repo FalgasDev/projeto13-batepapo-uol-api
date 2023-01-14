@@ -31,7 +31,7 @@ const userSchema = Joi.object({
 const messageSchema = Joi.object({
   to: Joi.string().required(),
   text: Joi.string().required(),
-  type: Joi.string().valid('message', 'private_message')
+  type: Joi.string().valid('message', 'private_message').required()
 })
 
 server.post('/participants', async (req, res) => {
@@ -121,7 +121,7 @@ server.post('/status', async (req, res) => {
   const user = req.headers.user
 
   if(!await db.collection("participants").findOne({name: user})) {
-    return res.status(422).send('Você não está logado')
+    return res.status(404).send('Você não está logado')
   }
 
   await db.collection("participants").updateOne({name: user}, {$set: {lastStatus: Date.now()}})
