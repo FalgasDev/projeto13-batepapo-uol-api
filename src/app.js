@@ -146,7 +146,7 @@ server.delete('/messages/:ID_DA_MENSAGEM', async (req, res) => {
 
 	await db.collection('messages').deleteOne({ _id: ObjectId(id) });
 
-	res.sendStatus(202);
+	res.send('Mensagem removida');
 });
 
 server.put('/messages/:ID_DA_MENSAGEM', async (req, res) => {
