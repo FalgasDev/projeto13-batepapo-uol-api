@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs';
 import Joi from 'joi';
@@ -132,6 +132,45 @@ server.post('/status', async (req, res) => {
 		.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
 
 	res.sendStatus(200);
+});
+
+server.delete('/messages/:ID_DA_MENSAGEM', async (req, res) => {
+	const { user } = req.headers;
+	const id = req.params.ID_DA_MENSAGEM;
+
+	const messageSelected = await db
+		.collection('messages')
+		.findOne({ _id: ObjectId(id) });
+	if (!messageSelected) return res.sendStatus(404);
+	if (messageSelected.from !== user) return res.sendStatus(401);
+
+	await db.collection('messages').deleteOne({ _id: ObjectId(id) });
+
+	res.sendStatus(202);
+});
+
+server.put('/messages/:ID_DA_MENSAGEM', async (req, res) => {
+	const { to, text, type } = req.body;
+	const { user } = req.headers;
+	const id = req.params.ID_DA_MENSAGEM;
+	const editValidation = messageSchema.validate({ to, text, type });
+
+	if (editValidation.error) return res.sendStatus(422);
+
+	if (!(await db.collection('participants').findOne({ name: user })))
+		return res.status(422).send('Você não está logado');
+
+	const messageSelected = await db
+		.collection('messages')
+		.findOne({ _id: ObjectId(id) });
+	if (!messageSelected) return res.sendStatus(404);
+	if (messageSelected.from !== user) return res.sendStatus(401);
+
+	await db
+		.collection('messages')
+		.updateOne({ _id: ObjectId(id) }, { $set: { to, text, type } });
+
+	res.send('Mensagem atualizada');
 });
 
 function removeParticipant() {
