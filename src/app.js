@@ -100,7 +100,7 @@ server.post('/messages', async (req, res) => {
 });
 
 server.get('/messages', async (req, res) => {
-	const limit = Number(req.query.limit);
+	const limit = req.query.limit;
 	const user = req.headers.user;
 	let lastMessages = [];
 
@@ -125,8 +125,10 @@ server.get('/messages', async (req, res) => {
 		console.log(err);
 	}
 
-	if (limit && (limit < 1 || isNaN(limit))) {
-		return res.sendStatus(422);
+	if (limit) {
+		if (+limit <= 0 || isNaN(Number(limit))) {
+			return res.sendStatus(422);
+		}
 	}
 
 	if (!limit) {
