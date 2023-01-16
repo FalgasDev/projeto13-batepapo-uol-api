@@ -38,29 +38,37 @@ server.post('/participants', async (req, res) => {
 		return res.sendStatus(422);
 	}
 
-	if (await db.collection('participants').findOne({ name })) {
-		return res.status(409).send('Esse user já está em uso');
+	try {
+		if (await db.collection('participants').findOne({ name })) {
+			return res.status(409).send('Esse user já está em uso');
+		}
+
+		await db.collection('messages').insertOne({
+			from: name,
+			to: 'Todos',
+			text: 'entra na sala...',
+			type: 'status',
+			time: dayjs(Date.now()).format('hh:mm:ss'),
+		});
+
+		await db.collection('participants').insertOne({
+			name,
+			lastStatus: Date.now(),
+		});
+
+		res.sendStatus(201);
+	} catch (err) {
+		console.log(err);
 	}
-
-	await db.collection('messages').insertOne({
-		from: name,
-		to: 'Todos',
-		text: 'entra na sala...',
-		type: 'status',
-		time: dayjs(Date.now()).format('hh:mm:ss'),
-	});
-
-	await db.collection('participants').insertOne({
-		name,
-		lastStatus: Date.now(),
-	});
-
-	res.sendStatus(201);
 });
 
 server.get('/participants', async (req, res) => {
-	const users = await db.collection('participants').find().toArray();
-	res.send(users);
+	try {
+		const users = await db.collection('participants').find().toArray();
+		res.send(users);
+	} catch (err) {
+		console.log(err);
+	}
 });
 
 server.post('/messages', async (req, res) => {
@@ -72,41 +80,50 @@ server.post('/messages', async (req, res) => {
 		return res.sendStatus(422);
 	}
 
-	if (!(await db.collection('participants').findOne({ name: from }))) {
-		return res.status(422).send('Você não está logado');
+	try {
+		if (!(await db.collection('participants').findOne({ name: from }))) {
+			return res.status(422).send('Você não está logado');
+		}
+
+		await db.collection('messages').insertOne({
+			to,
+			text,
+			type,
+			from,
+			time: dayjs(Date.now()).format('hh:mm:ss'),
+		});
+
+		res.sendStatus(201);
+	} catch (err) {
+		console.log(err);
 	}
-
-	await db.collection('messages').insertOne({
-		to,
-		text,
-		type,
-		from,
-		time: dayjs(Date.now()).format('hh:mm:ss'),
-	});
-
-	res.sendStatus(201);
 });
 
 server.get('/messages', async (req, res) => {
 	const limit = Number(req.query.limit);
 	const user = req.headers.user;
 	let lastMessages = [];
-	const messages = await db.collection('messages').find().toArray();
 
-	lastMessages = messages.filter((item) => {
-		if (item.type === 'message' || item.type === 'status') {
-			return true;
-		}
+	try {
+		const messages = await db.collection('messages').find().toArray();
 
-		if (
-			(item.type === 'private_message' && item.from === user) ||
-			item.to === user
-		) {
-			return true;
-		}
+		lastMessages = messages.filter((item) => {
+			if (item.type === 'message' || item.type === 'status') {
+				return true;
+			}
 
-		return false;
-	});
+			if (
+				(item.type === 'private_message' && item.from === user) ||
+				item.to === user
+			) {
+				return true;
+			}
+
+			return false;
+		});
+	} catch (err) {
+		console.log(err);
+	}
 
 	if (limit && (limit < 1 || isNaN(limit))) {
 		return res.sendStatus(422);
@@ -123,30 +140,38 @@ server.get('/messages', async (req, res) => {
 server.post('/status', async (req, res) => {
 	const user = req.headers.user;
 
-	if (!(await db.collection('participants').findOne({ name: user }))) {
-		return res.status(404).send('Você não está logado');
+	try {
+		if (!(await db.collection('participants').findOne({ name: user }))) {
+			return res.status(404).send('Você não está logado');
+		}
+
+		await db
+			.collection('participants')
+			.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
+
+		res.sendStatus(200);
+	} catch (err) {
+		console.log(err);
 	}
-
-	await db
-		.collection('participants')
-		.updateOne({ name: user }, { $set: { lastStatus: Date.now() } });
-
-	res.sendStatus(200);
 });
 
 server.delete('/messages/:ID_DA_MENSAGEM', async (req, res) => {
 	const { user } = req.headers;
 	const id = req.params.ID_DA_MENSAGEM;
 
-	const messageSelected = await db
-		.collection('messages')
-		.findOne({ _id: ObjectId(id) });
-	if (!messageSelected) return res.sendStatus(404);
-	if (messageSelected.from !== user) return res.sendStatus(401);
+	try {
+		const messageSelected = await db
+			.collection('messages')
+			.findOne({ _id: ObjectId(id) });
+		if (!messageSelected) return res.sendStatus(404);
+		if (messageSelected.from !== user) return res.sendStatus(401);
 
-	await db.collection('messages').deleteOne({ _id: ObjectId(id) });
+		await db.collection('messages').deleteOne({ _id: ObjectId(id) });
 
-	res.send('Mensagem removida');
+		res.send('Mensagem removida');
+	} catch (err) {
+		console.log(err);
+	}
 });
 
 server.put('/messages/:ID_DA_MENSAGEM', async (req, res) => {
@@ -157,41 +182,49 @@ server.put('/messages/:ID_DA_MENSAGEM', async (req, res) => {
 
 	if (editValidation.error) return res.sendStatus(422);
 
-	if (!(await db.collection('participants').findOne({ name: user })))
-		return res.status(422).send('Você não está logado');
+	try {
+		if (!(await db.collection('participants').findOne({ name: user })))
+			return res.status(422).send('Você não está logado');
 
-	const messageSelected = await db
-		.collection('messages')
-		.findOne({ _id: ObjectId(id) });
-	if (!messageSelected) return res.sendStatus(404);
-	if (messageSelected.from !== user) return res.sendStatus(401);
+		const messageSelected = await db
+			.collection('messages')
+			.findOne({ _id: ObjectId(id) });
+		if (!messageSelected) return res.sendStatus(404);
+		if (messageSelected.from !== user) return res.sendStatus(401);
 
-	await db
-		.collection('messages')
-		.updateOne({ _id: ObjectId(id) }, { $set: { to, text, type } });
+		await db
+			.collection('messages')
+			.updateOne({ _id: ObjectId(id) }, { $set: { to, text, type } });
 
-	res.send('Mensagem atualizada');
+		res.send('Mensagem atualizada');
+	} catch (err) {
+		console.log(err);
+	}
 });
 
 function removeParticipant() {
 	setInterval(async () => {
 		const lastStatusExpired = Date.now() - 10000;
 
-		const users = await db.collection('participants').find().toArray();
+		try {
+			const users = await db.collection('participants').find().toArray();
 
-		users.forEach(async (item) => {
-			if (item.lastStatus < lastStatusExpired) {
-				await db.collection('participants').deleteOne({ name: item.name });
+			users.forEach(async (item) => {
+				if (item.lastStatus < lastStatusExpired) {
+					await db.collection('participants').deleteOne({ name: item.name });
 
-				await db.collection('messages').insertOne({
-					from: item.name,
-					to: 'Todos',
-					text: 'sai da sala...',
-					type: 'status',
-					time: dayjs(Date.now()).format('hh:mm:ss'),
-				});
-			}
-		});
+					await db.collection('messages').insertOne({
+						from: item.name,
+						to: 'Todos',
+						text: 'sai da sala...',
+						type: 'status',
+						time: dayjs(Date.now()).format('hh:mm:ss'),
+					});
+				}
+			});
+		} catch (err) {
+			console.log(err);
+		}
 	}, 15000);
 }
 
